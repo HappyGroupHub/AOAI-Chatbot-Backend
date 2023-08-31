@@ -1,0 +1,8 @@
+# Config File
+.env
+
+# IDE Files and Environment
+.vscode
+.idea
+__pycache__
+venv

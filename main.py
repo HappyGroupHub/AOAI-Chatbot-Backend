@@ -7,7 +7,7 @@ import azure.cosmos.cosmos_client as cosmos_client
 import numpy as np
 import pandas as pd
 from dotenv import load_dotenv
-from fastapi import FastAPI, Query
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from openai.embeddings_utils import cosine_similarity
 from pydantic import BaseModel
@@ -66,12 +66,23 @@ class RequestBody(BaseModel):
     data: str
 
 
+@app.post("/add")
+def create_item(item: ChatCompletion):
+    """Save chat history to CosmosDB"""
+    container.create_item(body=item.dict())
+
+
 @app.get("/items/{user_id}/{n}")
 def get_last_n_item(user_id: str, n: int) -> list[dict[str, Any]]:
-    query = "SELECT * FROM c WHERE c.user_id LIKE '{0}%' ORDER BY c._ts DESC".format(
-        user_id)
+    """Retrieve a certain amount of chat history from a user
 
-    logging.info("Executing query: {}".format(query))
+    :param str user_id: user id
+    :param int n: number of history conversations to retrieve
+    :return list: list of chat history
+    """
+    query = f"SELECT * FROM c WHERE c.user_id LIKE '{user_id}' ORDER BY c._ts DESC"
+
+    logging.info(f"Executing query: {query}")
     items = list(container.query_items(
         query=query,
         enable_cross_partition_query=True
@@ -81,13 +92,13 @@ def get_last_n_item(user_id: str, n: int) -> list[dict[str, Any]]:
             (reversed(items[:n]) if len(items) >= n else items)]
 
 
-@app.post("/add")
-def create_item(item: ChatCompletion):
-    container.create_item(body=item.dict())
-
-
 @app.post("/search")
 def search_docs_emb(body: RequestBody):
+    """Calculate cosine similarity between question embeddings and user input embedding
+
+    :param body: RequestBody
+    :return: List of answers
+    """
     embedding = json.loads(body.data).get('data')[0].get('embedding')
 
     docs['similarities'] = [cosine_similarity(
